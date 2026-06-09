@@ -1,0 +1,27 @@
+:root {
+  --primary: #2e75b6;
+  --accent: #ed7d31;
+  --gray-50: #f7f8fa;
+  --gray-200: #e5e7eb;
+  --gray-700: #374151;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--gray-50);
+  color: var(--gray-700);
+  font-family:
+    "Pretendard",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

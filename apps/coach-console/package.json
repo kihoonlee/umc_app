@@ -1,0 +1,27 @@
+{
+  "name": "@umc/coach-console",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "lint": "echo \"(@umc/coach-console) Phase 0: typecheck로 정적검사\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@umc/types": "workspace:*",
+    "@umc/ui": "workspace:*",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.47.10",
+    "next": "^16.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.3"
+  }
+}

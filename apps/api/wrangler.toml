@@ -1,0 +1,9 @@
+name = "umc-api"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 시크릿(SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY)은 로컬은 .dev.vars,
+# 배포는 `wrangler secret put` 사용. 공개 변수만 아래 [vars] 에.
+[vars]
+ENVIRONMENT = "development"

@@ -1,0 +1,4 @@
+# `wrangler dev` 로컬 시크릿 — 이 파일을 .dev.vars 로 복사해 채운다 (gitignore됨)
+SUPABASE_URL="http://127.0.0.1:54321"
+SUPABASE_SERVICE_ROLE_KEY=""
+ANTHROPIC_API_KEY=""
