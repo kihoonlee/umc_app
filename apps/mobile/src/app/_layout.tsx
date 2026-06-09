@@ -1,6 +1,11 @@
 import { Stack } from "expo-router";
+import { AppProvider } from "@/lib/app-state";
 
-/** 루트 레이아웃 — Phase 0 최소 Stack. 아이/엄마 탭·인증 가드는 Phase 1~2 에서 구성. */
+/** 루트 레이아웃 — 세션/선택자녀 Provider + 미니멀 Stack. */
 export default function RootLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <AppProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </AppProvider>
+  );
 }
