@@ -17,12 +17,13 @@ export function starsForScore(score: number): number {
 }
 
 /**
- * M1 read-aloud 결과 영속 + 보상 갱신 (service-role).
+ * 채점형 활동(M1 read / M2 shadow) 영속 + 보상 갱신 (service-role).
  * learning_session(당일 재사용) → activity insert → progress 별·streak 갱신.
  */
-export async function persistReadAloud(
+export async function persistScoredActivity(
   db: UmcClient,
   args: {
+    type: "m1_read" | "m2_shadow";
     childId: string;
     contentId: string | null;
     audioPath: string | null;
@@ -59,9 +60,10 @@ export async function persistReadAloud(
     session_id: sessionId,
     child_id: args.childId,
     content_id: args.contentId,
-    type: "m1_read",
+    type: args.type,
     pronunciation_score: avgScore,
-    wcpm: args.result.wcpm,
+    wcpm: args.type === "m1_read" ? args.result.wcpm : null,
+    fluency_score: args.type === "m2_shadow" ? args.result.prosody : null,
     detail: {
       ...JSON.parse(JSON.stringify(args.result)),
       audio_path: args.audioPath,

@@ -64,14 +64,22 @@ export default function KidHome() {
 
       <View style={styles.card}>
         <Text style={styles.cardLabel}>오늘의 학습 카드</Text>
-        <Text style={styles.cardMain}>📖 책 1권 · 🎤 연따 1세트 · 🃏 단어 5장</Text>
+        <Text style={styles.cardMain}>📖 책 1권 · 🎤 연따 1세트 · 🦊 미코 대화</Text>
         <Text style={styles.cardSub}>약 18분이면 끝나요</Text>
         <Pressable style={styles.cta} onPress={() => router.push("/books")}>
-          <Text style={styles.ctaText}>시작하기</Text>
+          <Text style={styles.ctaText}>📖 책 읽기</Text>
         </Pressable>
+        <View style={styles.ctaRow}>
+          <Pressable style={[styles.ctaSecondary, styles.flexHalf]} onPress={() => router.push("/clips")}>
+            <Text style={styles.ctaSecondaryText}>🎤 연따</Text>
+          </Pressable>
+          <Pressable style={[styles.ctaSecondary, styles.flexHalf]} onPress={() => router.push("/mico")}>
+            <Text style={styles.ctaSecondaryText}>🦊 미코와 대화</Text>
+          </Pressable>
+        </View>
       </View>
 
-      <Text style={styles.note}>M1 Reading Quest 열림 — 연따(M2)·단어 카드는 다음 업데이트!</Text>
+      <Text style={styles.note}>M1 읽기 + M2 연따·미코 열림 — 단어 카드는 다음 업데이트!</Text>
     </SafeAreaView>
   );
 }
@@ -127,6 +135,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   ctaText: { color: "#fff", fontWeight: "800", fontSize: fontSize.bodyKid },
+  ctaRow: { flexDirection: "row", gap: space.sm },
+  flexHalf: { flex: 1 },
+  ctaSecondary: {
+    backgroundColor: color.primary,
+    borderRadius: radius.full,
+    paddingVertical: space.md,
+    alignItems: "center",
+  },
+  ctaSecondaryText: { color: "#fff", fontWeight: "800", fontSize: fontSize.body },
   note: {
     textAlign: "center",
     color: color.dark,
