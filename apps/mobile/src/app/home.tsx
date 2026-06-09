@@ -66,15 +66,12 @@ export default function KidHome() {
         <Text style={styles.cardLabel}>오늘의 학습 카드</Text>
         <Text style={styles.cardMain}>📖 책 1권 · 🎤 연따 1세트 · 🃏 단어 5장</Text>
         <Text style={styles.cardSub}>약 18분이면 끝나요</Text>
-        <Pressable
-          style={styles.cta}
-          onPress={() => notify("곧 만나요!", "M1 Reading Quest 는 다음 업데이트에서 열려요. 🦊")}
-        >
+        <Pressable style={styles.cta} onPress={() => router.push("/books")}>
           <Text style={styles.ctaText}>시작하기</Text>
         </Pressable>
       </View>
 
-      <Text style={styles.note}>Phase 1 — 인증·프로필 연결 완료. M1 루프는 Phase 2.</Text>
+      <Text style={styles.note}>M1 Reading Quest 열림 — 연따(M2)·단어 카드는 다음 업데이트!</Text>
     </SafeAreaView>
   );
 }

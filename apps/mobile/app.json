@@ -34,6 +34,13 @@
             "imageWidth": 76
           }
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "소리 내어 읽기 평가를 위해 마이크를 사용해요.",
+          "recordAudioAndroid": true
+        }
       ]
     ],
     "experiments": {

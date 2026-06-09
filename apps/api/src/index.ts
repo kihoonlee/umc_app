@@ -5,6 +5,8 @@ import { ok, fail } from "@umc/types";
 import type { DailyPlan, ReadAloudRequest } from "@umc/types";
 import { mockReadAloud } from "./mock/score";
 import { micoReply, coachDraft } from "./llm";
+import { serviceClient, userIdFromAuthHeader, assertChildOwner } from "./db";
+import { persistReadAloud } from "./learning";
 
 type Bindings = {
   SUPABASE_URL?: string;
@@ -37,20 +39,69 @@ app.get("/v1/children/:childId/daily-plan", (c) => {
   return c.json(ok(plan, { mock: true }));
 });
 
-// ── M1 소리내어읽기 평가 (Mock-first) ────────────────────────────────
+// ── M1 소리내어읽기 평가 (Mock-first) + 영속·보상 ────────────────────
+// 인증: Authorization: Bearer <supabase access_token>. 채점은 mock(텍스트 기반),
+// 영속(learning_session/activity)과 보상(progress 별·streak)은 실제로 수행.
 app.post("/v1/learning/m1/read-aloud", async (c) => {
   const body = await c.req.json<ReadAloudRequest>().catch(() => null);
-  if (!body?.expectedText) {
+  if (!body?.expectedText || !body.childId) {
     return c.json(
       fail({
         code: "BAD_REQUEST",
-        message: "expectedText is required",
+        message: "expectedText / childId required",
         userMessage: "읽을 문장을 찾지 못했어요. 다시 시도해 주세요.",
       }),
       400,
     );
   }
-  return c.json(ok(mockReadAloud(body.expectedText)));
+
+  let db;
+  try {
+    db = serviceClient(c.env);
+  } catch (e) {
+    return c.json(
+      fail({
+        code: "CONFIG",
+        message: e instanceof Error ? e.message : "config error",
+        userMessage: "서버 설정 오류예요. 잠시 후 다시 시도해 주세요.",
+      }),
+      500,
+    );
+  }
+
+  const userId = await userIdFromAuthHeader(db, c.req.header("authorization"));
+  if (!userId) {
+    return c.json(
+      fail({ code: "UNAUTHORIZED", message: "invalid token", userMessage: "로그인이 만료됐어요. 다시 로그인해 주세요." }),
+      401,
+    );
+  }
+  if (!(await assertChildOwner(db, body.childId, userId))) {
+    return c.json(
+      fail({ code: "FORBIDDEN", message: "child not owned", userMessage: "프로필 정보를 확인할 수 없어요." }),
+      403,
+    );
+  }
+
+  const result = mockReadAloud(body.expectedText);
+  try {
+    const reward = await persistReadAloud(db, {
+      childId: body.childId,
+      contentId: body.contentId ?? null,
+      audioPath: body.audioPath ?? null,
+      result,
+    });
+    return c.json(ok({ result, reward }));
+  } catch (e) {
+    return c.json(
+      fail({
+        code: "PERSIST_FAILED",
+        message: e instanceof Error ? e.message : "persist error",
+        userMessage: "점수 저장에 실패했어요. 다시 시도해 주세요.",
+      }),
+      500,
+    );
+  }
 });
 
 // ── M2 미코 대화 (LLM, 키 없으면 mock) ───────────────────────────────

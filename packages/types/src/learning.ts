@@ -22,11 +22,22 @@ export interface ReadAloudResult {
 export interface ReadAloudRequest {
   activityId?: string;
   childId: string;
-  contentId: string;
-  /** Supabase Storage 의 녹음 파일 경로(또는 signed URL) */
-  audioPath: string;
+  contentId?: string | null;
+  /** Supabase Storage 의 녹음 파일 경로. 녹음/업로드 실패 시 null 허용(채점은 진행) */
+  audioPath?: string | null;
   /** 정답 텍스트(해당 페이지/문장) */
   expectedText: string;
+}
+
+/** read-aloud 응답: 채점 결과 + 보상 */
+export interface ReadAloudResponse {
+  result: ReadAloudResult;
+  reward: {
+    starsEarned: number;
+    totalStars: number;
+    streakDays: number;
+    streakExtended: boolean;
+  };
 }
 
 /** 오늘의 학습 카드 (AI 일일 학습 계획) — Mock-first */

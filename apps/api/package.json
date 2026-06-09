@@ -11,6 +11,8 @@
     "build": "wrangler deploy --dry-run --outdir dist"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.0",
+    "@umc/db": "workspace:*",
     "@umc/types": "workspace:*",
     "hono": "^4.6.14"
   },
