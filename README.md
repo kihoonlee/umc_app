@@ -39,15 +39,16 @@ packages/
 supabase/         로컬 스택 config + 마이그레이션 + seed
 ```
 
-## 시작하기
+## 시작하기 (라이브 환경 — 기본)
+
+라이브 Supabase(개인 프로젝트 `ssvyqgfdxlwhkspcqbvb`)에 직접 연결해 개발한다. **Docker 불필요.**
 
 ```bash
 # 0. pnpm (없으면): curl -fsSL https://get.pnpm.io/install.sh | sh -
 pnpm install
 
-# 1. 로컬 Supabase (Docker 필요)
-pnpm supabase:start         # Postgres/Auth/Storage/Realtime 기동 → URL·키 출력
-cp .env.example .env.local  # 출력된 anon/service_role 키로 채움
+# 1. env — .env.example 를 .env.local 로 복사하고 라이브 URL/키 입력
+#    (apps/api 는 apps/api/.dev.vars 에 동일하게)
 
 # 2. 개발 서버
 pnpm dev                    # 전체 turbo dev
@@ -56,6 +57,15 @@ pnpm dev                    # 전체 turbo dev
 # 3. 검증
 pnpm lint && pnpm typecheck && pnpm build
 ```
+
+### DB 마이그레이션 (라이브)
+
+```bash
+# 직접 연결(db.<ref>...:5432)은 IPv6 전용 → IPv4 환경에선 Session Pooler 사용
+supabase db push --db-url "postgresql://postgres.<ref>:<PASSWORD>@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres"
+```
+
+> 로컬 Supabase(Docker)도 가능: `pnpm supabase:start` (포트 55xxx — MyHub 와 공존). 선택사항.
 
 ## 빌드 순서 (Walking Skeleton)
 
