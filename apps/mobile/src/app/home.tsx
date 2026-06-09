@@ -11,10 +11,17 @@ import { supabase } from "@/lib/supabase";
  * 아이 홈 — 미코 + 별·Streak(라이브 progress) + 오늘의 학습 카드 (§5.1).
  * 학습 카드 → M1 루프는 Phase 2 에서 연결.
  */
+interface CheerRow {
+  id: string;
+  emoji: string;
+  message: string | null;
+}
+
 export default function KidHome() {
   const { session, child } = useApp();
   const [stars, setStars] = useState<number | null>(null);
   const [streak, setStreak] = useState<number | null>(null);
+  const [cheer, setCheer] = useState<CheerRow | null>(null);
 
   useEffect(() => {
     if (!session) {
@@ -40,8 +47,32 @@ export default function KidHome() {
         setStreak(0);
         notify("진척 불러오기 실패", errorMessage(e));
       }
+      // 미확인 엄마 응원 — 미코가 전달 (실패는 조용히 무시해도 학습엔 지장 없지만 일관성 위해 알림 생략 대상 아님 → 단, 반복 노출 방지 위해 1회만)
+      try {
+        const { data } = await supabase
+          .from("cheer")
+          .select("id,emoji,message")
+          .eq("child_id", child.id)
+          .eq("seen", false)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data) setCheer(data as CheerRow);
+      } catch {
+        // 응원 조회 실패는 핵심 흐름 아님 — 다음 진입 시 재시도
+      }
     })();
   }, [session, child]);
+
+  async function dismissCheer() {
+    if (!cheer) return;
+    setCheer(null);
+    try {
+      await supabase.from("cheer").update({ seen: true }).eq("id", cheer.id);
+    } catch {
+      // seen 처리 실패 시 다음에 다시 보일 뿐 — 치명적이지 않음
+    }
+  }
 
   if (!child) return null;
 
@@ -54,8 +85,21 @@ export default function KidHome() {
         <View style={styles.statRow}>
           <Text style={styles.stat}>🔥 {streak ?? "…"}일</Text>
           <Text style={styles.stat}>⭐ {stars ?? "…"}</Text>
+          <Pressable onPress={() => router.push("/parent")}>
+            <Text style={styles.parentBtn}>👩</Text>
+          </Pressable>
         </View>
       </View>
+
+      {cheer && (
+        <Pressable style={styles.cheerBanner} onPress={dismissCheer}>
+          <Text style={styles.cheerText}>
+            🦊 엄마가 응원을 보냈어요! {cheer.emoji}
+            {cheer.message ? ` "${cheer.message}"` : ""}
+          </Text>
+          <Text style={styles.cheerClose}>닫기 ✕</Text>
+        </Pressable>
+      )}
 
       <View style={styles.hero}>
         <Text style={styles.mico}>🦊</Text>
@@ -102,8 +146,21 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs,
     overflow: "hidden",
   },
-  statRow: { flexDirection: "row", gap: space.md },
+  statRow: { flexDirection: "row", gap: space.md, alignItems: "center" },
   stat: { fontSize: fontSize.bodyKid, fontWeight: "700", color: color.dark },
+  parentBtn: { fontSize: 22 },
+  cheerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: color.kidPink,
+    borderRadius: radius.lg,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm + 2,
+    gap: space.sm,
+  },
+  cheerText: { flex: 1, fontWeight: "700", color: color.dark, fontSize: fontSize.body },
+  cheerClose: { color: color.dark, opacity: 0.6, fontWeight: "700", fontSize: fontSize.caption },
   hero: { alignItems: "center", marginTop: space.lg, marginBottom: space.xl },
   mico: { fontSize: 88 },
   greeting: {

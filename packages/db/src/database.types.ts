@@ -146,6 +146,51 @@ export type Database = {
           },
         ]
       }
+      cheer: {
+        Row: {
+          child_id: string
+          created_at: string
+          emoji: string
+          id: string
+          message: string | null
+          parent_id: string
+          seen: boolean
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          emoji?: string
+          id?: string
+          message?: string | null
+          parent_id: string
+          seen?: boolean
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          emoji?: string
+          id?: string
+          message?: string | null
+          parent_id?: string
+          seen?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cheer_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cheer_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coach_message: {
         Row: {
           ai_draft: string | null

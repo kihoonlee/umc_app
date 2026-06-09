@@ -51,6 +51,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.47.10
         version: 2.107.0
+      '@umc/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@umc/types':
         specifier: workspace:*
         version: link:../../packages/types
