@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import type { ApiEnvelope } from "@umc/types";
 import { color, radius, space } from "@umc/ui";
 import { getSupabase } from "@/lib/supabase";
@@ -48,10 +48,19 @@ const TYPE_LABEL: Record<string, string> = {
   word_review: "🃏 단어",
 };
 
-/** 회원 상세 (§8.2) — 학습 데이터 + 메시지 이력 + AI 초안 작성·발송. */
-export default function MemberDetail() {
-  const params = useParams<{ id: string }>();
-  const childId = params.id;
+/** 회원 상세 (§8.2) — 학습 데이터 + 메시지 이력 + AI 초안 작성·발송.
+ *  정적 export(Cloudflare Pages) 호환을 위해 /member?id=… 쿼리 파라미터 사용. */
+export default function MemberDetailPage() {
+  return (
+    <Suspense fallback={<main style={s.page}>불러오는 중…</main>}>
+      <MemberDetail />
+    </Suspense>
+  );
+}
+
+function MemberDetail() {
+  const searchParams = useSearchParams();
+  const childId = searchParams.get("id") ?? "";
   const [child, setChild] = useState<ChildInfo | null>(null);
   const [acts, setActs] = useState<ActRow[]>([]);
   const [msgs, setMsgs] = useState<MsgRow[]>([]);

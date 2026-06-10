@@ -125,7 +125,7 @@ export default function CoachHome() {
 
       <div style={{ display: "grid", gap: space.sm }}>
         {members?.map((m) => (
-          <Link key={m.id} href={`/member/${m.id}`} style={s.memberCard}>
+          <Link key={m.id} href={`/member?id=${m.id}`} style={s.memberCard}>
             <div style={{ flex: 1 }}>
               <strong style={{ fontSize: 16 }}>{m.name}</strong>
               <span style={s.meta}>

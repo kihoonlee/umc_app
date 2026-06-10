@@ -39,6 +39,18 @@ packages/
 supabase/         로컬 스택 config + 마이그레이션 + seed
 ```
 
+## 라이브 배포 (Cloudflare)
+
+| 서비스 | URL |
+|---|---|
+| 아이/엄마 App (웹) | https://umc-app.pages.dev |
+| 코치 콘솔 | https://umc-coach.pages.dev |
+| API (Worker) | https://umc-api.powergenes.workers.dev |
+
+재배포: `apps/api` → `npx wrangler deploy` / 모바일 →
+`EXPO_PUBLIC_API_URL=https://umc-api.powergenes.workers.dev npx expo export -p web && npx wrangler pages deploy dist --project-name umc-app --branch main` /
+콘솔 → `NEXT_PUBLIC_API_URL=… npx next build && npx wrangler pages deploy out --project-name umc-coach --branch main`
+
 ## 시작하기 (라이브 환경 — 기본)
 
 라이브 Supabase(개인 프로젝트 `ssvyqgfdxlwhkspcqbvb`)에 직접 연결해 개발한다. **Docker 불필요.**
