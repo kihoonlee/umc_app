@@ -40,17 +40,17 @@ export async function assertChildOwner(
   return !!data;
 }
 
-/** child 에 대한 호출자 역할 — 'parent' | 'coach' | null */
+/** child 에 대한 호출자 역할 — 'parent' | 'coach' | 'admin'(개발자 전권) | null */
 export async function childAccessRole(
   db: UmcClient,
   childId: string,
   userId: string,
-): Promise<"parent" | "coach" | null> {
-  const { data } = await db
-    .from("children")
-    .select("parent_id,coach_id")
-    .eq("id", childId)
-    .maybeSingle();
+): Promise<"parent" | "coach" | "admin" | null> {
+  const [{ data }, { data: u }] = await Promise.all([
+    db.from("children").select("parent_id,coach_id").eq("id", childId).maybeSingle(),
+    db.from("users").select("role").eq("id", userId).maybeSingle(),
+  ]);
+  if (u?.role === "admin") return "admin";
   if (!data) return null;
   if (data.parent_id === userId) return "parent";
   if (data.coach_id === userId) return "coach";

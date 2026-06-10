@@ -15,6 +15,10 @@ import { color, fontSize, radius, space } from "@umc/ui";
 import { notify, errorMessage } from "@/lib/notify";
 import { supabase } from "@/lib/supabase";
 
+/** 개발자 원클릭 로그인 — admin 전권 (실사용자 오픈 전 제거 대상) */
+const DEV_EMAIL = "dev@umc.dev";
+const DEV_PASSWORD = "umc-dev-master-2026";
+
 /** 엄마(보호자) 로그인/가입 — email+password. Google SSO 는 프로바이더 설정 후 활성화. */
 export default function Login() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -60,6 +64,23 @@ export default function Login() {
       }
     } catch (e) {
       notify(mode === "signin" ? "로그인 실패" : "가입 실패", errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function devLogin() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: DEV_EMAIL,
+        password: DEV_PASSWORD,
+      });
+      if (error) throw error;
+      router.replace("/profiles");
+    } catch (e) {
+      notify("개발자 로그인 실패", errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -138,6 +159,10 @@ export default function Login() {
           >
             <Text style={styles.googleText}>G  Google 로 계속하기 (준비 중)</Text>
           </Pressable>
+
+          <Pressable style={styles.devBtn} onPress={devLogin} disabled={busy}>
+            <Text style={styles.devText}>🛠 개발자 로그인 (전체 권한)</Text>
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -198,4 +223,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   googleText: { color: color.gray700, fontWeight: "600" },
+  devBtn: {
+    borderWidth: 1,
+    borderColor: color.dark,
+    borderStyle: "dashed",
+    borderRadius: radius.full,
+    paddingVertical: space.sm + 2,
+    alignItems: "center",
+    opacity: 0.75,
+  },
+  devText: { color: color.dark, fontWeight: "700", fontSize: fontSize.body },
 });

@@ -24,7 +24,7 @@ app.use("*", cors());
 type AuthedCtx = {
   db: ReturnType<typeof serviceClient>;
   userId: string;
-  role: "parent" | "coach";
+  role: "parent" | "coach" | "admin";
 };
 
 /** 공용: 토큰 검증 + child 접근 역할 확인. 실패 시 Response 반환. */
@@ -286,7 +286,7 @@ app.post("/v1/reports/weekly/:id/approve", async (c) => {
   const { data: report } = await db.from("weekly_report").select("id,child_id").eq("id", reportId).maybeSingle();
   if (!report) return c.json(fail({ code: "NOT_FOUND", message: "report not found", userMessage: "리포트를 찾을 수 없어요." }), 404);
   const role = await childAccessRole(db, report.child_id, userId);
-  if (role !== "coach") {
+  if (role !== "coach" && role !== "admin") {
     return c.json(fail({ code: "FORBIDDEN", message: "coach only", userMessage: "담당 코치만 승인할 수 있어요." }), 403);
   }
   const { data, error } = await db
@@ -318,7 +318,7 @@ app.post("/v1/reports/weekly/:id/open", async (c) => {
     .maybeSingle();
   if (!report) return c.json(fail({ code: "NOT_FOUND", message: "report not found", userMessage: "리포트를 찾을 수 없어요." }), 404);
   const role = await childAccessRole(db, report.child_id, userId);
-  if (role !== "parent") {
+  if (role !== "parent" && role !== "admin") {
     return c.json(fail({ code: "FORBIDDEN", message: "parent only", userMessage: "보호자만 열람 처리할 수 있어요." }), 403);
   }
   if (!report.opened_at) {
@@ -380,7 +380,7 @@ app.post("/v1/children/:childId/diagnostic", async (c) => {
   }
   const auth = await authChild(c, childId, (b, s) => c.json(b as object, s));
   if (auth instanceof Response) return auth;
-  if (auth.role !== "parent") {
+  if (auth.role !== "parent" && auth.role !== "admin") {
     return c.json(fail({ code: "FORBIDDEN", message: "parent only", userMessage: "보호자 계정으로 진행해 주세요." }), 403);
   }
   const level = mapDiagnostic(body.scores);

@@ -14,7 +14,11 @@ interface MemberRow {
   progress: { total_stars: number; streak_days: number; last_active: string | null } | null;
 }
 
-/** 코치 대시보드 (§8.1) — 로그인 + 담당 회원 목록·상태. */
+/** 개발자 원클릭 로그인 — admin 전권 (실사용자 오픈 전 제거 대상) */
+const DEV_EMAIL = "dev@umc.dev";
+const DEV_PASSWORD = "umc-dev-master-2026";
+
+/** 코치 대시보드 (§8.1) — 로그인 + 담당 회원 목록·상태. admin 은 전체 회원 표시. */
 export default function CoachHome() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [members, setMembers] = useState<MemberRow[] | null>(null);
@@ -62,6 +66,22 @@ export default function CoachHome() {
     }
   }
 
+  async function devLogin() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { error: err } = await getSupabase().auth.signInWithPassword({
+        email: DEV_EMAIL,
+        password: DEV_PASSWORD,
+      });
+      if (err) throw err;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "개발자 로그인에 실패했어요.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (session === undefined) return <main style={s.page}>불러오는 중…</main>;
 
   if (!session) {
@@ -89,6 +109,9 @@ export default function CoachHome() {
           {error && <p style={s.error}>⚠ {error}</p>}
           <button style={s.cta} disabled={busy}>
             {busy ? "로그인 중…" : "로그인"}
+          </button>
+          <button type="button" style={s.devBtn} onClick={() => void devLogin()} disabled={busy}>
+            🛠 개발자 로그인 (전체 권한)
           </button>
         </form>
       </main>
@@ -205,4 +228,15 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
   },
   error: { color: color.danger, fontSize: 14, margin: 0 },
+  devBtn: {
+    background: "none",
+    border: `1px dashed ${color.gray700}`,
+    color: color.gray700,
+    borderRadius: radius.full,
+    padding: `${space.sm}px`,
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+    opacity: 0.75,
+  },
 };
