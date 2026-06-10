@@ -22,6 +22,8 @@ export default function KidHome() {
   const [stars, setStars] = useState<number | null>(null);
   const [streak, setStreak] = useState<number | null>(null);
   const [cheer, setCheer] = useState<CheerRow | null>(null);
+  const [cefr, setCefr] = useState<string | null | undefined>(undefined);
+  const [dueWords, setDueWords] = useState(0);
 
   useEffect(() => {
     if (!session) {
@@ -46,6 +48,23 @@ export default function KidHome() {
         setStars(0);
         setStreak(0);
         notify("진척 불러오기 실패", errorMessage(e));
+      }
+      // 레벨(진단 여부) + 오늘 due 단어 수 — 배너/뱃지용 (비치명, 실패 시 미표시)
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const [c, w] = await Promise.all([
+          supabase.from("children").select("cefr_level").eq("id", child.id).single(),
+          supabase
+            .from("word_card")
+            .select("id", { count: "exact", head: true })
+            .eq("child_id", child.id)
+            .neq("status", "graduated")
+            .lte("due_date", today),
+        ]);
+        setCefr(c.data?.cefr_level ?? null);
+        setDueWords(w.count ?? 0);
+      } catch {
+        setCefr(null);
       }
       // 미확인 엄마 응원 — 미코가 전달 (실패는 조용히 무시해도 학습엔 지장 없지만 일관성 위해 알림 생략 대상 아님 → 단, 반복 노출 방지 위해 1회만)
       try {
@@ -101,6 +120,12 @@ export default function KidHome() {
         </Pressable>
       )}
 
+      {cefr === null && (
+        <Pressable style={styles.diagBanner} onPress={() => router.push("/diagnostic")}>
+          <Text style={styles.diagText}>📐 2분 레벨 진단 받고 딱 맞는 책 추천받기 ›</Text>
+        </Pressable>
+      )}
+
       <View style={styles.hero}>
         <Text style={styles.mico}>🦊</Text>
         <Text style={styles.greeting}>{child.name}야, 오늘은 뭐 할까?</Text>
@@ -118,12 +143,17 @@ export default function KidHome() {
             <Text style={styles.ctaSecondaryText}>🎤 연따</Text>
           </Pressable>
           <Pressable style={[styles.ctaSecondary, styles.flexHalf]} onPress={() => router.push("/mico")}>
-            <Text style={styles.ctaSecondaryText}>🦊 미코와 대화</Text>
+            <Text style={styles.ctaSecondaryText}>🦊 미코</Text>
+          </Pressable>
+          <Pressable style={[styles.ctaSecondary, styles.flexHalf]} onPress={() => router.push("/words")}>
+            <Text style={styles.ctaSecondaryText}>
+              🃏 단어{dueWords > 0 ? ` ${dueWords}` : ""}
+            </Text>
           </Pressable>
         </View>
       </View>
 
-      <Text style={styles.note}>M1 읽기 + M2 연따·미코 열림 — 단어 카드는 다음 업데이트!</Text>
+      <Text style={styles.note}>읽기·연따·미코·단어 복습까지 — 오늘의 루프를 완성해 보세요!</Text>
     </SafeAreaView>
   );
 }
@@ -161,6 +191,14 @@ const styles = StyleSheet.create({
   },
   cheerText: { flex: 1, fontWeight: "700", color: color.dark, fontSize: fontSize.body },
   cheerClose: { color: color.dark, opacity: 0.6, fontWeight: "700", fontSize: fontSize.caption },
+  diagBanner: {
+    backgroundColor: color.kidPurple,
+    borderRadius: radius.lg,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm + 2,
+    marginTop: space.sm,
+  },
+  diagText: { fontWeight: "700", color: color.dark, fontSize: fontSize.body },
   hero: { alignItems: "center", marginTop: space.lg, marginBottom: space.xl },
   mico: { fontSize: 88 },
   greeting: {

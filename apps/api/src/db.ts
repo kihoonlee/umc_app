@@ -40,6 +40,23 @@ export async function assertChildOwner(
   return !!data;
 }
 
+/** child 에 대한 호출자 역할 — 'parent' | 'coach' | null */
+export async function childAccessRole(
+  db: UmcClient,
+  childId: string,
+  userId: string,
+): Promise<"parent" | "coach" | null> {
+  const { data } = await db
+    .from("children")
+    .select("parent_id,coach_id")
+    .eq("id", childId)
+    .maybeSingle();
+  if (!data) return null;
+  if (data.parent_id === userId) return "parent";
+  if (data.coach_id === userId) return "coach";
+  return null;
+}
+
 /** Asia/Seoul 기준 YYYY-MM-DD (아이 학습일 경계는 한국 시간) */
 export function seoulDate(d = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(d);

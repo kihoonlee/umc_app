@@ -48,6 +48,45 @@ export async function micoReply(
   }
 }
 
+/** 주간 리포트 AI 요약 — 사실 기반·격려 톤 (상세 기획서 §7.4). 키 없으면 mock. */
+export async function weeklySummary(
+  apiKey: string | undefined,
+  opts: { childName: string; metricsText: string },
+): Promise<{ text: string; mock: boolean }> {
+  const prompt =
+    `당신은 어린이 영어 학습 서비스의 주간 리포트 작성 보조입니다. ` +
+    `아이 "${opts.childName}"의 이번 주 학습 데이터: ${opts.metricsText}. ` +
+    `학부모용 주간 리포트 요약을 한국어로 작성하세요. 사실 기반, 따뜻한 격려 톤, 300자 이내. ` +
+    `구성: (1) 한눈에 보기 한 줄 (2) 이번 주 성장 포인트 1~2개 (3) 다음 주 작은 제안 1개. 과장·단정 금지.`;
+
+  if (!apiKey) {
+    return {
+      text: `이번 주 ${opts.childName}(이)는 꾸준히 학습을 이어갔어요. 소리 내어 읽기에 자신감이 붙고 있고, 연따 점수도 안정적이에요. 다음 주에는 하루 한 구간만 더 도전해보면 좋겠어요! (mock 요약)`,
+      mock: true,
+    };
+  }
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: MICO_MODEL,
+        max_tokens: 500,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!res.ok) return { text: "(요약 생성 실패 — 다시 시도해 주세요)", mock: true };
+    const data = (await res.json()) as { content?: { text?: string }[] };
+    return { text: data.content?.[0]?.text ?? "...", mock: false };
+  } catch {
+    return { text: "(요약 생성 실패 — 다시 시도해 주세요)", mock: true };
+  }
+}
+
 export async function coachDraft(
   apiKey: string | undefined,
   opts: { childName: string; summary: string },

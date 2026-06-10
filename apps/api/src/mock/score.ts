@@ -18,7 +18,7 @@ export function mockReadAloud(expectedText: string): ReadAloudResult {
     .filter(Boolean);
 
   const wordScores: WordScore[] = words.map((w) => {
-    const score = 60 + (hash(w.toLowerCase()) % 41); // 60~100, 결정적
+    const score = 40 + (hash(w.toLowerCase()) % 61); // 40~100, 결정적 (red<50 구간 포함)
     if (score >= 70) return { word: w, score, status: "correct" };
     return {
       word: w,

@@ -5,8 +5,11 @@ import { ok, fail } from "@umc/types";
 import type { DailyPlan, ReadAloudRequest } from "@umc/types";
 import { mockReadAloud } from "./mock/score";
 import { micoReply, coachDraft } from "./llm";
-import { serviceClient, userIdFromAuthHeader, assertChildOwner } from "./db";
+import { serviceClient, userIdFromAuthHeader, assertChildOwner, childAccessRole } from "./db";
 import { persistScoredActivity } from "./learning";
+import { generateWeeklyReport } from "./reports";
+import { collectWeakWords, gradeWordCard, completeWordReview } from "./words";
+import { mapDiagnostic } from "./levels";
 
 type Bindings = {
   SUPABASE_URL?: string;
@@ -17,6 +20,41 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 app.use("*", logger());
 app.use("*", cors());
+
+type AuthedCtx = {
+  db: ReturnType<typeof serviceClient>;
+  userId: string;
+  role: "parent" | "coach";
+};
+
+/** 공용: 토큰 검증 + child 접근 역할 확인. 실패 시 Response 반환. */
+async function authChild(
+  c: { env: Bindings; req: { header: (n: string) => string | undefined } },
+  childId: string | undefined,
+  json: (body: unknown, status: 400 | 401 | 403 | 500) => Response,
+): Promise<AuthedCtx | Response> {
+  if (!childId) {
+    return json(fail({ code: "BAD_REQUEST", message: "childId required", userMessage: "프로필 정보가 없어요." }), 400);
+  }
+  let db;
+  try {
+    db = serviceClient(c.env);
+  } catch (e) {
+    return json(
+      fail({ code: "CONFIG", message: e instanceof Error ? e.message : "config", userMessage: "서버 설정 오류예요." }),
+      500,
+    );
+  }
+  const userId = await userIdFromAuthHeader(db, c.req.header("authorization"));
+  if (!userId) {
+    return json(fail({ code: "UNAUTHORIZED", message: "invalid token", userMessage: "로그인이 만료됐어요." }), 401);
+  }
+  const role = await childAccessRole(db, childId, userId);
+  if (!role) {
+    return json(fail({ code: "FORBIDDEN", message: "no access", userMessage: "프로필 정보를 확인할 수 없어요." }), 403);
+  }
+  return { db, userId, role };
+}
 
 // ── Health ───────────────────────────────────────────────────────────
 app.get("/health", (c) =>
@@ -92,7 +130,18 @@ app.post("/v1/learning/m1/read-aloud", async (c) => {
       audioPath: body.audioPath ?? null,
       result,
     });
-    return c.json(ok({ result, reward }));
+    // 약점 단어(red) 자동 수집 → 내일 복습 카드 (실패해도 채점 흐름은 유지)
+    let wordsCollected = 0;
+    try {
+      wordsCollected = await collectWeakWords(db, {
+        childId: body.childId,
+        contentId: body.contentId ?? null,
+        result,
+      });
+    } catch {
+      // word_card 수집 실패는 비치명 — 다음 학습에서 재수집됨
+    }
+    return c.json(ok({ result, reward, wordsCollected }));
   } catch (e) {
     return c.json(
       fail({
@@ -198,6 +247,151 @@ app.post("/v1/coach/messages/draft", async (c) => {
     summary: body.summary ?? "",
   });
   return c.json(ok(draft));
+});
+
+// ── 주간 리포트: 초안 생성 (코치/부모) ───────────────────────────────
+app.post("/v1/reports/weekly/generate", async (c) => {
+  const body = await c.req.json<{ childId?: string }>().catch(() => null);
+  const auth = await authChild(c, body?.childId, (b, s) => c.json(b as object, s));
+  if (auth instanceof Response) return auth;
+  const { db } = auth;
+  try {
+    const { data: child } = await db.from("children").select("name").eq("id", body!.childId!).single();
+    const out = await generateWeeklyReport(db, {
+      childId: body!.childId!,
+      childName: child?.name ?? "아이",
+      anthropicKey: c.env.ANTHROPIC_API_KEY,
+    });
+    return c.json(ok(out));
+  } catch (e) {
+    return c.json(
+      fail({ code: "REPORT_FAILED", message: e instanceof Error ? e.message : "error", userMessage: "리포트 생성에 실패했어요." }),
+      500,
+    );
+  }
+});
+
+// ── 주간 리포트: 코치 승인·발송 ──────────────────────────────────────
+app.post("/v1/reports/weekly/:id/approve", async (c) => {
+  const reportId = c.req.param("id");
+  let db;
+  try {
+    db = serviceClient(c.env);
+  } catch (e) {
+    return c.json(fail({ code: "CONFIG", message: String(e), userMessage: "서버 설정 오류예요." }), 500);
+  }
+  const userId = await userIdFromAuthHeader(db, c.req.header("authorization"));
+  if (!userId) return c.json(fail({ code: "UNAUTHORIZED", message: "invalid token", userMessage: "로그인이 만료됐어요." }), 401);
+
+  const { data: report } = await db.from("weekly_report").select("id,child_id").eq("id", reportId).maybeSingle();
+  if (!report) return c.json(fail({ code: "NOT_FOUND", message: "report not found", userMessage: "리포트를 찾을 수 없어요." }), 404);
+  const role = await childAccessRole(db, report.child_id, userId);
+  if (role !== "coach") {
+    return c.json(fail({ code: "FORBIDDEN", message: "coach only", userMessage: "담당 코치만 승인할 수 있어요." }), 403);
+  }
+  const { data, error } = await db
+    .from("weekly_report")
+    .update({ coach_reviewed: true, sent_at: new Date().toISOString() })
+    .eq("id", reportId)
+    .select("id,coach_reviewed,sent_at")
+    .single();
+  if (error) return c.json(fail({ code: "PERSIST_FAILED", message: error.message, userMessage: "승인 처리에 실패했어요." }), 500);
+  return c.json(ok(data));
+});
+
+// ── 주간 리포트: 엄마 열람 (성과지표③ opened_at) ────────────────────
+app.post("/v1/reports/weekly/:id/open", async (c) => {
+  const reportId = c.req.param("id");
+  let db;
+  try {
+    db = serviceClient(c.env);
+  } catch (e) {
+    return c.json(fail({ code: "CONFIG", message: String(e), userMessage: "서버 설정 오류예요." }), 500);
+  }
+  const userId = await userIdFromAuthHeader(db, c.req.header("authorization"));
+  if (!userId) return c.json(fail({ code: "UNAUTHORIZED", message: "invalid token", userMessage: "로그인이 만료됐어요." }), 401);
+
+  const { data: report } = await db
+    .from("weekly_report")
+    .select("id,child_id,opened_at")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (!report) return c.json(fail({ code: "NOT_FOUND", message: "report not found", userMessage: "리포트를 찾을 수 없어요." }), 404);
+  const role = await childAccessRole(db, report.child_id, userId);
+  if (role !== "parent") {
+    return c.json(fail({ code: "FORBIDDEN", message: "parent only", userMessage: "보호자만 열람 처리할 수 있어요." }), 403);
+  }
+  if (!report.opened_at) {
+    await db.from("weekly_report").update({ opened_at: new Date().toISOString() }).eq("id", reportId);
+  }
+  return c.json(ok({ opened: true }));
+});
+
+// ── Word Bank: 카드 채점 (SRS lite) ──────────────────────────────────
+app.post("/v1/word-cards/:id/grade", async (c) => {
+  const cardId = c.req.param("id");
+  const body = await c.req.json<{ childId?: string; correct?: boolean }>().catch(() => null);
+  const auth = await authChild(c, body?.childId, (b, s) => c.json(b as object, s));
+  if (auth instanceof Response) return auth;
+  try {
+    const out = await gradeWordCard(auth.db, {
+      cardId,
+      childId: body!.childId!,
+      correct: !!body?.correct,
+    });
+    return c.json(ok(out));
+  } catch (e) {
+    return c.json(
+      fail({ code: "GRADE_FAILED", message: e instanceof Error ? e.message : "error", userMessage: "카드 채점에 실패했어요." }),
+      500,
+    );
+  }
+});
+
+// ── Word Bank: 복습 세션 완료 → 보상 ─────────────────────────────────
+app.post("/v1/learning/words/complete", async (c) => {
+  const body = await c.req.json<{ childId?: string; total?: number; correct?: number }>().catch(() => null);
+  const auth = await authChild(c, body?.childId, (b, s) => c.json(b as object, s));
+  if (auth instanceof Response) return auth;
+  try {
+    const reward = await completeWordReview(auth.db, {
+      childId: body!.childId!,
+      total: body?.total ?? 0,
+      correct: body?.correct ?? 0,
+    });
+    return c.json(ok({ reward }));
+  } catch (e) {
+    return c.json(
+      fail({ code: "PERSIST_FAILED", message: e instanceof Error ? e.message : "error", userMessage: "복습 결과 저장에 실패했어요." }),
+      500,
+    );
+  }
+});
+
+// ── 진단(D0) → 레벨 산정 → children 갱신 ─────────────────────────────
+app.post("/v1/children/:childId/diagnostic", async (c) => {
+  const childId = c.req.param("childId");
+  const body = await c.req.json<{ scores?: number[] }>().catch(() => null);
+  if (!body?.scores || body.scores.length < 3) {
+    return c.json(
+      fail({ code: "BAD_REQUEST", message: "scores[3] required", userMessage: "진단 점수가 부족해요. 다시 시도해 주세요." }),
+      400,
+    );
+  }
+  const auth = await authChild(c, childId, (b, s) => c.json(b as object, s));
+  if (auth instanceof Response) return auth;
+  if (auth.role !== "parent") {
+    return c.json(fail({ code: "FORBIDDEN", message: "parent only", userMessage: "보호자 계정으로 진행해 주세요." }), 403);
+  }
+  const level = mapDiagnostic(body.scores);
+  const { error } = await auth.db
+    .from("children")
+    .update({ cefr_level: level.cefr, lexile: level.lexile })
+    .eq("id", childId);
+  if (error) {
+    return c.json(fail({ code: "PERSIST_FAILED", message: error.message, userMessage: "레벨 저장에 실패했어요." }), 500);
+  }
+  return c.json(ok(level));
 });
 
 app.notFound((c) =>

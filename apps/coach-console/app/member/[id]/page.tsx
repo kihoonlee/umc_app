@@ -27,6 +27,19 @@ interface MsgRow {
   body: string;
   sent_at: string | null;
 }
+interface ReportRow {
+  id: string;
+  week_start: string;
+  metrics: {
+    days_learned?: number;
+    total_activities?: number;
+    avg_score?: number | null;
+  } | null;
+  ai_summary: string | null;
+  coach_reviewed: boolean;
+  sent_at: string | null;
+  opened_at: string | null;
+}
 
 const TYPE_LABEL: Record<string, string> = {
   m1_read: "📖 읽기",
@@ -47,6 +60,9 @@ export default function MemberDetail() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [reports, setReports] = useState<ReportRow[]>([]);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportErr, setReportErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const supabase = getSupabase();
@@ -74,6 +90,13 @@ export default function MemberDetail() {
       setChild(c.data as unknown as ChildInfo);
       setActs((a.data as ActRow[]) ?? []);
       setMsgs((m.data as MsgRow[]) ?? []);
+      const r = await supabase
+        .from("weekly_report")
+        .select("id,week_start,metrics,ai_summary,coach_reviewed,sent_at,opened_at")
+        .eq("child_id", childId)
+        .order("week_start", { ascending: false })
+        .limit(4);
+      if (!r.error) setReports((r.data as unknown as ReportRow[]) ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "데이터를 불러오지 못했어요.");
     }
@@ -106,6 +129,49 @@ export default function MemberDetail() {
       setError(e instanceof Error ? e.message : "AI 초안 생성에 실패했어요.");
     } finally {
       setDrafting(false);
+    }
+  }
+
+  async function apiCall<T>(path: string, body?: unknown): Promise<T> {
+    const supabase = getSupabase();
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    if (!token) throw new Error("로그인이 만료됐어요.");
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8787";
+    const res = await fetch(`${apiUrl}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const env = (await res.json()) as ApiEnvelope<T>;
+    if (env.error || !env.data) throw new Error(env.error?.userMessage ?? `HTTP ${res.status}`);
+    return env.data;
+  }
+
+  async function generateReport() {
+    if (!child) return;
+    setReportBusy(true);
+    setReportErr(null);
+    try {
+      await apiCall("/v1/reports/weekly/generate", { childId: child.id });
+      await load();
+    } catch (e) {
+      setReportErr(e instanceof Error ? e.message : "리포트 생성 실패");
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
+  async function approveReport(id: string) {
+    setReportBusy(true);
+    setReportErr(null);
+    try {
+      await apiCall(`/v1/reports/weekly/${id}/approve`);
+      await load();
+    } catch (e) {
+      setReportErr(e instanceof Error ? e.message : "승인 실패");
+    } finally {
+      setReportBusy(false);
     }
   }
 
@@ -199,6 +265,43 @@ export default function MemberDetail() {
             <div key={m.id} style={s.msgRow}>
               <p style={{ margin: 0, fontSize: 14 }}>{m.body}</p>
               <span style={s.meta}>{m.sent_at ? new Date(m.sent_at).toLocaleString("ko-KR") : ""}</span>
+            </div>
+          ))}
+        </section>
+
+        <section style={{ ...s.card, gridColumn: "1 / -1" }}>
+          <h2 style={s.h2}>주간 리포트 검수 (§7.4 — AI 초안 → 코치 승인 → 발송)</h2>
+          <button style={s.draftBtn} onClick={() => void generateReport()} disabled={reportBusy}>
+            {reportBusy ? "처리 중…" : "📊 이번 주 리포트 초안 생성"}
+          </button>
+          {reportErr && <p style={s.error}>⚠ {reportErr}</p>}
+          {reports.length === 0 && <p style={s.meta}>아직 리포트가 없어요. 초안을 생성해 보세요.</p>}
+          {reports.map((r) => (
+            <div key={r.id} style={s.msgRow}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <strong style={{ fontSize: 14 }}>{r.week_start} 주</strong>
+                <span style={s.meta}>
+                  {r.opened_at
+                    ? `✓ 엄마 열람 (${new Date(r.opened_at).toLocaleDateString("ko-KR")})`
+                    : r.sent_at
+                      ? "발송됨 · 열람 대기"
+                      : "검수 대기"}
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: color.gray700, opacity: 0.8 }}>
+                학습 {r.metrics?.days_learned ?? 0}일 · 활동 {r.metrics?.total_activities ?? 0}회 · 평균{" "}
+                {r.metrics?.avg_score ?? "-"}점
+              </p>
+              {r.ai_summary && <p style={{ margin: 0, fontSize: 14 }}>{r.ai_summary}</p>}
+              {!r.sent_at && (
+                <button
+                  style={{ ...s.cta, padding: `${space.xs + 2}px` }}
+                  onClick={() => void approveReport(r.id)}
+                  disabled={reportBusy}
+                >
+                  검수 승인 · 발송
+                </button>
+              )}
             </div>
           ))}
         </section>

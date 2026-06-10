@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { color, fontSize, radius, space } from "@umc/ui";
 import { useApp } from "@/lib/app-state";
+import { callApi } from "@/lib/api";
 import { notify, errorMessage } from "@/lib/notify";
 import { supabase } from "@/lib/supabase";
 
@@ -23,6 +24,13 @@ interface CoachMsg {
   id: string;
   body: string;
   sent_at: string | null;
+}
+interface ReportRow {
+  id: string;
+  week_start: string;
+  metrics: { days_learned?: number; total_activities?: number; avg_score?: number | null } | null;
+  ai_summary: string | null;
+  opened_at: string | null;
 }
 interface DayAgg {
   label: string; // 월~일
@@ -43,6 +51,8 @@ export default function ParentDashboard() {
   const [acts, setActs] = useState<ActRow[] | null>(null);
   const [coachMsgs, setCoachMsgs] = useState<CoachMsg[]>([]);
   const [sendingCheer, setSendingCheer] = useState(false);
+  const [reports, setReports] = useState<ReportRow[]>([]);
+  const [openReportId, setOpenReportId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!child) return;
@@ -66,6 +76,14 @@ export default function ParentDashboard() {
       if (actRes.error) throw actRes.error;
       setActs((actRes.data as ActRow[]) ?? []);
       if (!msgRes.error) setCoachMsgs((msgRes.data as CoachMsg[]) ?? []);
+      const repRes = await supabase
+        .from("weekly_report")
+        .select("id,week_start,metrics,ai_summary,opened_at")
+        .eq("child_id", child.id)
+        .not("sent_at", "is", null)
+        .order("week_start", { ascending: false })
+        .limit(4);
+      if (!repRes.error) setReports((repRes.data as unknown as ReportRow[]) ?? []);
     } catch (e) {
       setActs([]);
       notify("데이터 불러오기 실패", errorMessage(e));
@@ -83,6 +101,21 @@ export default function ParentDashboard() {
     }
     void load();
   }, [session, child, load]);
+
+  async function openReport(r: ReportRow) {
+    setOpenReportId(openReportId === r.id ? null : r.id);
+    if (!r.opened_at) {
+      try {
+        await callApi(`/v1/reports/weekly/${r.id}/open`, { body: {} });
+        setReports((prev) =>
+          prev.map((x) => (x.id === r.id ? { ...x, opened_at: new Date().toISOString() } : x)),
+        );
+      } catch (e) {
+        // 열람 마킹 실패 — 내용 표시는 계속, 알림으로 고지
+        notify("열람 기록 실패", errorMessage(e));
+      }
+    }
+  }
 
   async function sendCheer(emoji: string) {
     if (!session || !child || sendingCheer) return;
@@ -199,6 +232,29 @@ export default function ParentDashboard() {
         </View>
 
         <View style={styles.card}>
+          <Text style={styles.cardLabel}>📋 주간 리포트</Text>
+          {reports.length === 0 ? (
+            <Text style={styles.emptyMsg}>아직 발송된 리포트가 없어요. 매주 일요일에 도착해요.</Text>
+          ) : (
+            reports.map((r) => (
+              <Pressable key={r.id} style={styles.reportRow} onPress={() => void openReport(r)}>
+                <View style={styles.reportHead}>
+                  <Text style={styles.reportWeek}>{r.week_start} 주</Text>
+                  <Text style={styles.reportBadge}>{r.opened_at ? "읽음" : "● 새 리포트"}</Text>
+                </View>
+                <Text style={styles.reportMeta}>
+                  학습 {r.metrics?.days_learned ?? 0}일 · 활동 {r.metrics?.total_activities ?? 0}회 · 평균{" "}
+                  {r.metrics?.avg_score ?? "-"}점
+                </Text>
+                {openReportId === r.id && r.ai_summary && (
+                  <Text style={styles.reportBody}>{r.ai_summary}</Text>
+                )}
+              </Pressable>
+            ))
+          )}
+        </View>
+
+        <View style={styles.card}>
           <Text style={styles.cardLabel}>🎁 {child.name} 응원하기</Text>
           <Text style={styles.cheerHint}>누르면 아이 화면에서 미코가 전해줘요</Text>
           <View style={styles.cheerRow}>
@@ -257,6 +313,12 @@ const styles = StyleSheet.create({
   msgBubble: { backgroundColor: color.gray50, borderRadius: radius.md, padding: space.md, gap: 4 },
   msgBody: { color: color.gray700, fontSize: fontSize.body, lineHeight: 21 },
   msgDate: { color: color.gray700, opacity: 0.5, fontSize: fontSize.caption },
+  reportRow: { backgroundColor: color.gray50, borderRadius: radius.md, padding: space.md, gap: 4 },
+  reportHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  reportWeek: { fontWeight: "800", color: color.gray700, fontSize: fontSize.body },
+  reportBadge: { color: color.accent, fontWeight: "700", fontSize: fontSize.caption },
+  reportMeta: { color: color.gray700, opacity: 0.65, fontSize: fontSize.caption },
+  reportBody: { color: color.gray700, fontSize: fontSize.body, lineHeight: 21, marginTop: 4 },
   cheerHint: { color: color.gray700, opacity: 0.6, fontSize: fontSize.caption },
   cheerRow: { flexDirection: "row", gap: space.md, marginTop: space.xs },
   cheerBtn: {

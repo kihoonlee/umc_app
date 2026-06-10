@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "mobile-web", "runtimeExecutable": "npx", "runtimeArgs": ["serve", "-s", "apps/mobile/dist", "-l", "8081"], "port": 8081, "autoPort": false },
+    { "name": "coach-console", "runtimeExecutable": "sh", "runtimeArgs": ["-c", "cd apps/coach-console && npx next start --port 3002"], "port": 3002, "autoPort": false }
+  ]
+}

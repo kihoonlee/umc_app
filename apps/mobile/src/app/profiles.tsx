@@ -75,7 +75,7 @@ export default function Profiles() {
         .single();
       if (error) throw error;
       await selectChild({ id: data.id, name: data.name });
-      router.replace("/home");
+      router.replace("/diagnostic"); // 새 프로필 → 온보딩 진단 (건너뛰기 가능)
     } catch (e) {
       notify("프로필 생성 실패", errorMessage(e));
     } finally {
