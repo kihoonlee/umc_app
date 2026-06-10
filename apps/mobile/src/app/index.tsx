@@ -16,6 +16,7 @@ export default function Gate() {
   }
   if (!session) return <Redirect href="/login" />;
   if (!child) return <Redirect href="/profiles" />;
+  if (!child.onboarded) return <Redirect href="/welcome" />;
   return <Redirect href="/home" />;
 }
 

@@ -20,6 +20,7 @@ interface ChildRow {
   name: string;
   birth_date: string;
   cefr_level: string | null;
+  mico_state: { onboarded?: boolean } | null;
 }
 
 /** 자녀 프로필 선택/생성 — 아이는 별도 로그인 없이 보호자 계정 하위 프로필로 진입 (§4.3). */
@@ -35,10 +36,10 @@ export default function Profiles() {
     try {
       const { data, error } = await supabase
         .from("children")
-        .select("id,name,birth_date,cefr_level")
+        .select("id,name,birth_date,cefr_level,mico_state")
         .order("created_at", { ascending: true });
       if (error) throw error;
-      setChildrenRows(data ?? []);
+      setChildrenRows((data as unknown as ChildRow[]) ?? []);
     } catch (e) {
       setChildrenRows([]);
       notify("프로필 불러오기 실패", errorMessage(e));
@@ -74,8 +75,8 @@ export default function Profiles() {
         .select("id,name")
         .single();
       if (error) throw error;
-      await selectChild({ id: data.id, name: data.name });
-      router.replace("/diagnostic"); // 새 프로필 → 온보딩 진단 (건너뛰기 가능)
+      await selectChild({ id: data.id, name: data.name, onboarded: false });
+      router.replace("/welcome"); // 새 프로필 → 온보딩 시작 (미코 인사부터)
     } catch (e) {
       notify("프로필 생성 실패", errorMessage(e));
     } finally {
@@ -84,8 +85,9 @@ export default function Profiles() {
   }
 
   async function pick(c: ChildRow) {
-    await selectChild({ id: c.id, name: c.name });
-    router.replace("/home");
+    const onboarded = c.mico_state?.onboarded === true;
+    await selectChild({ id: c.id, name: c.name, onboarded });
+    router.replace(onboarded ? "/home" : "/welcome");
   }
 
   if (childrenRows === null) {

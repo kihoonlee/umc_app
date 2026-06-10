@@ -15,6 +15,8 @@ import { supabase } from "./supabase";
 export interface SelectedChild {
   id: string;
   name: string;
+  /** 온보딩 완료 여부 (mico_state.onboarded). 미완료면 게이트가 /welcome 으로 보냄 */
+  onboarded: boolean;
 }
 
 interface AppState {

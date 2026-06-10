@@ -79,8 +79,8 @@ export default function Diagnostic() {
         );
         setLevel(result);
         setPhase("done");
-        // 선택 자녀 정보 갱신(레벨은 화면 표기용 — 이름만 유지)
-        await selectChild({ id: child.id, name: child.name });
+        // 선택 자녀 정보 유지(onboarded 플래그 보존 — 완료는 보상 단계에서)
+        await selectChild({ ...child });
       }
     } catch (e) {
       setPhase("ready");
@@ -105,7 +105,10 @@ export default function Diagnostic() {
           <Pressable style={styles.cta} onPress={() => setPhase("ready")}>
             <Text style={styles.ctaText}>시작!</Text>
           </Pressable>
-          <Pressable style={styles.skip} onPress={() => router.replace("/home")}>
+          <Pressable
+            style={styles.skip}
+            onPress={() => router.replace(child.onboarded ? "/home" : "/plan-preview")}
+          >
             <Text style={styles.skipText}>나중에 할래요</Text>
           </Pressable>
         </View>
@@ -158,8 +161,11 @@ export default function Diagnostic() {
           <Text style={styles.desc}>
             이제 {child.name}에게 딱 맞는 책과 연따를 추천해줄게요!
           </Text>
-          <Pressable style={styles.cta} onPress={() => router.replace("/home")}>
-            <Text style={styles.ctaText}>학습 시작하기</Text>
+          <Pressable
+            style={styles.cta}
+            onPress={() => router.replace(child.onboarded ? "/home" : "/plan-preview")}
+          >
+            <Text style={styles.ctaText}>{child.onboarded ? "학습 시작하기" : "다음"}</Text>
           </Pressable>
         </View>
       )}

@@ -10,6 +10,7 @@ import { persistScoredActivity } from "./learning";
 import { generateWeeklyReport } from "./reports";
 import { collectWeakWords, gradeWordCard, completeWordReview } from "./words";
 import { mapDiagnostic } from "./levels";
+import { startTrial, completeOnboarding } from "./onboarding";
 
 type Bindings = {
   SUPABASE_URL?: string;
@@ -392,6 +393,45 @@ app.post("/v1/children/:childId/diagnostic", async (c) => {
     return c.json(fail({ code: "PERSIST_FAILED", message: error.message, userMessage: "레벨 저장에 실패했어요." }), 500);
   }
   return c.json(ok(level));
+});
+
+// ── 온보딩: 무료 체험 시작 (멱등) ────────────────────────────────────
+app.post("/v1/subscriptions/trial", async (c) => {
+  let db;
+  try {
+    db = serviceClient(c.env);
+  } catch (e) {
+    return c.json(fail({ code: "CONFIG", message: String(e), userMessage: "서버 설정 오류예요." }), 500);
+  }
+  const userId = await userIdFromAuthHeader(db, c.req.header("authorization"));
+  if (!userId) {
+    return c.json(fail({ code: "UNAUTHORIZED", message: "invalid token", userMessage: "로그인이 만료됐어요." }), 401);
+  }
+  try {
+    const out = await startTrial(db, userId);
+    return c.json(ok(out));
+  } catch (e) {
+    return c.json(
+      fail({ code: "TRIAL_FAILED", message: e instanceof Error ? e.message : "error", userMessage: "체험 시작에 실패했어요. 다시 시도해 주세요." }),
+      500,
+    );
+  }
+});
+
+// ── 온보딩: 완료 (첫 별·스티커·onboarded, 멱등) ──────────────────────
+app.post("/v1/onboarding/complete", async (c) => {
+  const body = await c.req.json<{ childId?: string }>().catch(() => null);
+  const auth = await authChild(c, body?.childId, (b, s) => c.json(b as object, s));
+  if (auth instanceof Response) return auth;
+  try {
+    const out = await completeOnboarding(auth.db, body!.childId!);
+    return c.json(ok(out));
+  } catch (e) {
+    return c.json(
+      fail({ code: "ONBOARD_FAILED", message: e instanceof Error ? e.message : "error", userMessage: "온보딩 완료 처리에 실패했어요." }),
+      500,
+    );
+  }
 });
 
 app.notFound((c) =>
